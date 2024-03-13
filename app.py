@@ -49,10 +49,11 @@ def role_required(role_id):
                     payload = jwt.decode(
                         token, app.config['SECRET_KEY'], algorithms=["HS256"])
                     user_role = payload.get('role_id')
-                    print(user_role)
-                    print(user_role[0])
-                    print(role_id)
+                    cur.execute('''select * from users where role_id=%s''',(role_id,))
+                    data = cur.fetchall()
                     if user_role[0] == role_id:
+                        return jsonify(data)
+                    elif user_role[0]:
                         return func(*args, **kwargs)
                     else:
                         return jsonify({'error': 'insufficient permission'})
@@ -122,38 +123,14 @@ def logout():
         return jsonify({'error': 'token is missing'}), 403
 
 @app.route('/get_admin',methods=['GET'])
-#@role_required(2) 
+@role_required(2) 
 def get_admin():
-    token = request.headers.get('Authorization')
-    if token:
-        try:
-            token = token.split(" ")[1]
-            payload = jwt.decode(
-                token, app.config['SECRET_KEY'], algorithms=["HS256"])
-            role_id = payload.get('role_id')
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token has expired'}), 401
-    else:
-        return jsonify({'error': 'token is missing'})        
-    cur.execute('''select * from users where role_id=%s''',(role_id[0],))
-    d=cur.fetchone()
-    return jsonify(d)
+    return jsonify(data)
 
 @app.route('/get_users',methods=['GET'])
 @role_required(1) 
 def get_users():
-    token = request.headers.get('Authorization')
-    if token:
-        try:
-            token = token.split(" ")[1]
-            payload = jwt.decode(
-                token, app.config['SECRET_KEY'], algorithms=["HS256"])
-            role_id = payload.get('role_id')
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token has expired'}), 401    
-    cur.execute('''select * from users where role_id=%s''',(role_id[0],))
-    u=cur.fetchall()
-    return jsonify(u)
+    return jsonify(data)
 
 if __name__ == '__main__':
     app.run(debug=True)
