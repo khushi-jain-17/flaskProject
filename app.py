@@ -52,11 +52,8 @@ def role_required(role_id):
                     payload = jwt.decode(
                         token, app.config['SECRET_KEY'], algorithms=["HS256"])
                     user_role = payload.get('role_id')
-                    
                     if user_role[0] == role_id:
                         return func(*args, **kwargs)
-                    # elif user_role[0] == role_id:
-                    #     return jsonify(data)
                     else:
                         return jsonify({'error': 'insufficient permission'})
                 except jwt.ExpiredSignatureError:
@@ -114,6 +111,8 @@ def login():
 
 
 blacklist = set()
+
+
 @app.route('/logout/user', methods=['POST'])
 @token_required
 def logout():
@@ -129,7 +128,7 @@ def logout():
 @app.route('/get_admin', methods=['GET'])
 @role_required(2)
 def get_admin():
-    role_id=payload.get('role_id')
+    role_id = payload.get('role_id')
     cur.execute('''select * from users where role_id=%s''', (role_id,))
     data = cur.fetchall()
     return jsonify(data)
@@ -164,6 +163,26 @@ def get_posts():
     data = cur.fetchall()
     return jsonify(data)
 
+
+@app.route('/get_post/<int:id>', methods=['GET'])
+@role_required(2)
+def get_post(id):
+    cur.execute('''select pid,content,created_at from post where id=%s''', (id,))
+    data = cur.fetchall()
+    conn.commit()
+    return jsonify(data)
+
+@app.route('/update_post/<int:id>',methods=['PUT'])
+@role_required(2)
+def update_post(id):
+    pid = request.json['pid']
+    content = request.json['content']
+    cur.execute(
+        '''UPDATE post SET pid=%s, content=%s WHERE id=%s''', (
+            pid,content, id,)
+    )
+    conn.commit()
+    return jsonify({'message': 'item updated successfully'})
 
 if __name__ == '__main__':
     app.run(debug=True)
