@@ -22,7 +22,6 @@ conn = psycopg2.connect(
 
 cur = conn.cursor()
 
-
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -66,39 +65,58 @@ def role_required(role_id):
     return decorator
 
 
+# @app.route('/signup/user', methods=['POST'])
+# def signup():
+#     data = request.json
+#     uid = data.get("uid")
+#     uname = data.get("uname")
+#     email = data.get("email")
+#     password = data.get("password")
+#     role_id = data.get("role_id")
+#     cur.execute('''SeLECT * FROM users where email=%s''', (email,))
+#     existing_user = cur.fetchone()
+#     if existing_user:
+#         return jsonify({'message': 'User already exists'}), 400
+#     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+#     cur.execute('''INSERT INTO users(uid,uname,email,password,role_id) VALUES(%s,%s,%s,%s,%s)''',
+#                 (uid, uname, email, hashed_password, role_id))
+#     conn.commit()
+#     return "Registerd Successfully"
+
+
 @app.route('/signup/user', methods=['POST'])
 def signup():
     data = request.json
+    id = data.get("id")
     uid = data.get("uid")
     uname = data.get("uname")
     email = data.get("email")
     password = data.get("password")
     role_id = data.get("role_id")
-    cur.execute('''SeLECT * FROM users where email=%s''', (email,))
+    cur.execute('''select * FROM users where id=%s''', (id,))
     existing_user = cur.fetchone()
     if existing_user:
         return jsonify({'message': 'User already exists'}), 400
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-    cur.execute('''INSERT INTO users(uid,uname,email,password,role_id) VALUES(%s,%s,%s,%s,%s)''',
-                (uid, uname, email, hashed_password, role_id))
+    cur.execute('''INSERT INTO users(id,uid,uname,email,password,role_id) VALUES(%s,%s,%s,%s,%s,%s)''',
+                (id,uid, uname, email, hashed_password, role_id))
     conn.commit()
-    return "Registerd successfully"
-
+    return "Registerd Successfully"
 
 @app.route('/login/user', methods=['POST'])
 def login():
     data = request.json
-    email = data.get("email")
+    id = data.get("id")
     password = data.get("password")
-    cur.execute('''SELECT role_id FROM users where email=%s''', (email,))
+    cur.execute('''SELECT role_id FROM users where id=%s''', (id,))
     rid = cur.fetchone()
-    cur.execute('''SELECT password FROM users where email=%s''', (email,))
+    cur.execute('''SELECT password FROM users where id=%s''', (id,))
     user = cur.fetchone()
     if user:
         hashed_password = user[0]
         if check_password_hash(hashed_password, password):
             token = jwt.encode({
-                'email': email,
+                'id': id,
                 'role_id': rid,
                 'exp': datetime.utcnow() + timedelta(seconds=9900)
             }, app.config['SECRET_KEY'], algorithm='HS256')
@@ -111,7 +129,6 @@ def login():
 
 
 blacklist = set()
-
 
 @app.route('/logout/user', methods=['POST'])
 @token_required
@@ -194,7 +211,7 @@ def connect_users():
 @role_required(1)
 def create():
     data = request.json
-    pid = data.get('id')
+    pid = data.get('pid')
     content = data.get('content')
     likes = data.get('likes')
     uid = data.get('uid')
@@ -244,11 +261,13 @@ def delete_post(id):
     return jsonify({'message': 'Post deleted successfully'})
 
 
-@app.route('/user/<int:uid>', methods=['GET'])
+@app.route('/post_of_user/<string:uname>', methods=['GET'])
 @role_required(1)
-def posts_of_user(uid):
+def posts_of_user(uname):
+    # cur.execute(
+    #     '''select pid,content,created_at from post where id=%s''', (id,))
     cur.execute(
-        '''select pid,content,created_at, uid from post where uid=%s''', (uid,))
+        '''select post.content,post.created_at from post inner join users on post.uid=users.uid where users.uname=%s''', (uname,))
     data = cur.fetchall()
     conn.commit()
     return jsonify(data)
@@ -258,16 +277,17 @@ def posts_of_user(uid):
 @role_required(1)
 def like_post():
     data = request.json
+    pk = data.get('pk')
     uid = data.get('uid')
     likes = data.get('likes')
     pid = data.get('pid')
     cur.execute(
-        '''insert into post(uid,likes,pid) values(%s,%s,%s)''', (uid, likes, pid))
+        '''insert into post(pk,uid,likes,pid) values(%s,%s,%s,%s)''', (pk,uid, likes, pid))
     conn.commit()
-    return jsonify(data)
+    return jsonify({'message':'Like'})
 
 
-@app.route('/likes_count/<int:pid>', methods=['GET'])
+@app.route('/like_count/<int:pid>', methods=['GET'])
 @role_required(1)
 def count_likes(pid):
     cur.execute(
@@ -287,7 +307,7 @@ def posts_liked_by_user(uid):
 @app.route('/liked_by/<int:pid>', methods=['GET'])
 @role_required(1)
 def people_liked_the_post(pid):
-    cur.execute('''select users.uname, users.uid, post.content from users inner join post on users.uid=post.uid where post.pid=%s and likes='True' ''', (pid,))
+    cur.execute('''select users.uname, post.uid from users inner join post on users.uid=post.uid where post.pid=%s and likes='True' ''', (pid,))
     data = cur.fetchall()
     return jsonify(data)
 
@@ -304,6 +324,7 @@ def home(uid):
 
 
 @app.route('/create/likedata', methods=['POST'])
+@role_required(2)
 def create_likedata():
     data = request.json
     lid = data.get('lid')
